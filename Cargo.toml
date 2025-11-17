@@ -1,0 +1,22 @@
+[workspace.package]
+authors = ["Vedhavyas Singareddi<hi@vedhavyas.dev>"]
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+resolver = "2"
+members = ["substrate-p2p"]
+
+[workspace.dependencies]
+
+futures = "0.3.28"
+libp2p = { version = "0.56.0", features = ["dns", "identify", "kad", "macros", "mdns", "noise", "ping", "tcp", "tokio", "yamux", "websocket", "request-response"] }
+log = "0.4.17"
+pin-project = "1.0.12"
+asynchronous-codec = "0.7.0"
+unsigned-varint = { version = "0.8.0", features = ["futures", "asynchronous_codec"] }
+thiserror = "2.0.17"
+bytes = "1"
+codec = { package = "parity-scale-codec", version = "3.4.0", features = ["derive"] }
+hex = "0.4.3"
+multiaddr = { version = "0.18.1" }
