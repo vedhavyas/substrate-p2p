@@ -1,0 +1,17 @@
+[package]
+name = "substrate-p2p"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+futures = { workspace = true }
+libp2p = { workspace = true, features = ["kad"] }
+log = { workspace = true }
+pin-project = { workspace = true }
+asynchronous-codec = { workspace = true }
+unsigned-varint = { workspace = true, features = ["futures", "asynchronous_codec"] }
+thiserror = { workspace = true }
+bytes = { workspace = true }
+hex = { workspace = true }
+multiaddr = { workspace = true }
+codec.workspace = true
