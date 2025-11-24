@@ -6,7 +6,8 @@
 use crate::notifications::handler::{
     Handler, NotificationsHandlerFromBehavior, NotificationsHandlerToBehavior,
 };
-use codec::{Decode, Encode};
+use bytes::BytesMut;
+use codec::Encode;
 use futures::channel::mpsc;
 use libp2p::PeerId;
 use libp2p::core::transport::PortUse;
@@ -15,13 +16,15 @@ use libp2p::swarm::behaviour::{ConnectionClosed, ConnectionEstablished};
 use libp2p::swarm::{ConnectionDenied, ConnectionId, NetworkBehaviour, NotifyHandler, ToSwarm};
 use multiaddr::Multiaddr;
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fmt::Debug;
 use std::task::{Poll, Waker};
 
 /// The events emitted by this network behavior back to the swarm.
 #[derive(Debug)]
-pub enum Event<V: Decode> {
+pub enum Event<Hash: Clone> {
     /// Opened a protocol with the remote.
     ProtocolOpen {
+        protocol: Protocol<Hash>,
         /// Id of the peer we are connected to.
         peer_id: PeerId,
         /// Channel to send data on this protocol.
@@ -32,16 +35,18 @@ pub enum Event<V: Decode> {
     ///
     /// Any data captured from [`ProtocolOpen`] is stale (ie the sender).
     ProtocolClosed {
+        protocol: Protocol<Hash>,
         /// Id of the peer we were connected to.
         peer_id: PeerId,
     },
 
     /// A custom notification message has been received on the given protocol.
     Notification {
+        protocol: Protocol<Hash>,
         /// Id of the peer the message came from.
         peer_id: PeerId,
         /// Message that has been received.
-        message: V,
+        message: BytesMut,
     },
 }
 
@@ -53,35 +58,35 @@ pub enum Protocol<Hash: Clone> {
 }
 
 /// Notifications network Behavior.
-pub struct Behavior<Number, Hash: Clone, V: Decode> {
+pub struct Behavior<Number, Hash: Clone + Debug> {
     /// Events to produce from `poll()` back to the swarm.
     ///
     /// Events that are populated by either `on_swarm_event` (triggered from the higher-level swarm component)
     /// or `on_connection_handler_event` (triggered when requesting a substream).
-    events: VecDeque<ToSwarm<Event<V>, NotificationsHandlerFromBehavior>>,
+    events: VecDeque<ToSwarm<Event<Hash>, NotificationsHandlerFromBehavior>>,
     /// Peer details for valid connections.
     peers_details: HashMap<PeerId, HashSet<ConnectionId>>,
-    /// Notifications protocol
-    protocol: Protocol<Hash>,
+    /// Notifications protocols
+    protocols: Vec<Protocol<Hash>>,
     /// Ensure we wake up on events. Set by the poll function.
     waker: Option<Waker>,
     _marker: std::marker::PhantomData<Number>,
 }
 
-impl<Number, Hash: Clone, V: Decode> Behavior<Number, Hash, V> {
+impl<Number, Hash: Clone + Debug> Behavior<Number, Hash> {
     /// Constructs a new [`Behavior`].
-    pub fn new(protocol: Protocol<Hash>) -> Self {
+    pub fn new(protocols: Vec<Protocol<Hash>>) -> Self {
         Behavior {
             events: VecDeque::with_capacity(16),
             peers_details: HashMap::default(),
-            protocol,
+            protocols,
             waker: None,
             _marker: Default::default(),
         }
     }
 
     /// Propagate an event back to the swarm.
-    fn propagate_event(&mut self, event: ToSwarm<Event<V>, NotificationsHandlerFromBehavior>) {
+    fn propagate_event(&mut self, event: ToSwarm<Event<Hash>, NotificationsHandlerFromBehavior>) {
         if let Some(waker) = self.waker.take() {
             waker.wake();
         }
@@ -90,14 +95,13 @@ impl<Number, Hash: Clone, V: Decode> Behavior<Number, Hash, V> {
     }
 }
 
-impl<Number, Hash, V> NetworkBehaviour for Behavior<Number, Hash, V>
+impl<Number, Hash> NetworkBehaviour for Behavior<Number, Hash>
 where
     Number: From<u32> + Encode + 'static,
-    Hash: Clone + AsRef<[u8]> + Encode + 'static,
-    V: Decode + Send + 'static,
+    Hash: Debug + Send + Clone + AsRef<[u8]> + Encode + 'static,
 {
     type ConnectionHandler = Handler;
-    type ToSwarm = Event<V>;
+    type ToSwarm = Event<Hash>;
 
     fn handle_pending_inbound_connection(
         &mut self,
@@ -123,7 +127,7 @@ where
                 local_addr: local_addr.clone(),
                 send_back_addr: remote_addr.clone(),
             },
-            self.protocol.clone(),
+            self.protocols.clone(),
         );
 
         Ok(handler)
@@ -156,7 +160,7 @@ where
                 address: addr.clone(),
                 port_use: Default::default(),
             },
-            self.protocol.clone(),
+            self.protocols.clone(),
         );
 
         Ok(handler)
@@ -184,11 +188,13 @@ where
                         hash
                     });
 
-                self.propagate_event(ToSwarm::NotifyHandler {
-                    peer_id,
-                    handler: NotifyHandler::One(connection_id),
-                    event: NotificationsHandlerFromBehavior::Open,
-                });
+                for i in 0..self.protocols.len() {
+                    self.propagate_event(ToSwarm::NotifyHandler {
+                        peer_id,
+                        handler: NotifyHandler::One(connection_id),
+                        event: NotificationsHandlerFromBehavior::Open { i },
+                    });
+                }
             }
             libp2p::swarm::FromSwarm::ConnectionClosed(ConnectionClosed {
                 peer_id,
@@ -212,11 +218,13 @@ where
                     );
                 }
 
-                self.propagate_event(ToSwarm::NotifyHandler {
-                    peer_id,
-                    handler: NotifyHandler::One(connection_id),
-                    event: NotificationsHandlerFromBehavior::Close,
-                });
+                for i in 0..self.protocols.len() {
+                    self.propagate_event(ToSwarm::NotifyHandler {
+                        peer_id,
+                        handler: NotifyHandler::One(connection_id),
+                        event: NotificationsHandlerFromBehavior::Close { i },
+                    });
+                }
             }
             _ => (),
         }
@@ -231,50 +239,45 @@ where
         log::debug!("Notifications new substream for peer {peer_id:?} {event:?}",);
 
         match event {
-            NotificationsHandlerToBehavior::HandshakeCompleted { sender, .. } => {
+            NotificationsHandlerToBehavior::HandshakeCompleted { i, sender, .. } => {
                 log::trace!(
-                    "Notifications handler complited handshake peer={peer_id:?} connection={connection_id:?}",
+                    "Notifications handler completed handshake peer={peer_id:?} connection={connection_id:?}",
                 );
 
                 self.propagate_event(ToSwarm::GenerateEvent(Event::ProtocolOpen {
+                    protocol: self.protocols[i].clone(),
                     peer_id,
-
                     sender,
                 }));
             }
-            NotificationsHandlerToBehavior::HandshakeError => {
+            NotificationsHandlerToBehavior::HandshakeError { i } => {
                 log::trace!(
-                    "Notifications handler error handshake peer={peer_id:?} connection={connection_id:?}",
+                    "Notifications handler error handshake protocol = {:?} peer={peer_id:?} connection={connection_id:?}",
+                    self.protocols[i],
                 );
             }
-            NotificationsHandlerToBehavior::OpenDesiredByRemote => {
+            NotificationsHandlerToBehavior::OpenDesiredByRemote { i } => {
                 // Note: extend to reject protocols for specific peers in the future.
                 self.propagate_event(ToSwarm::NotifyHandler {
                     peer_id,
                     handler: NotifyHandler::One(connection_id),
-                    event: NotificationsHandlerFromBehavior::Open,
+                    event: NotificationsHandlerFromBehavior::Open { i },
                 });
             }
-            NotificationsHandlerToBehavior::CloseDesired => {
+            NotificationsHandlerToBehavior::CloseDesired { i } => {
                 self.propagate_event(ToSwarm::NotifyHandler {
                     peer_id,
                     handler: NotifyHandler::One(connection_id),
-                    event: NotificationsHandlerFromBehavior::Close,
+                    event: NotificationsHandlerFromBehavior::Close { i },
                 });
             }
-            NotificationsHandlerToBehavior::Close => {}
-            NotificationsHandlerToBehavior::Notification { bytes } => {
-                match V::decode(&mut bytes.as_ref()) {
-                    Ok(val) => {
-                        self.propagate_event(ToSwarm::GenerateEvent(Event::Notification {
-                            peer_id,
-                            message: val,
-                        }));
-                    }
-                    Err(err) => {
-                        log::error!("Error decoding notification: {err:?}");
-                    }
-                }
+            NotificationsHandlerToBehavior::Close { .. } => {}
+            NotificationsHandlerToBehavior::Notification { i, bytes } => {
+                self.propagate_event(ToSwarm::GenerateEvent(Event::Notification {
+                    protocol: self.protocols[i].clone(),
+                    peer_id,
+                    message: bytes,
+                }))
             }
         }
     }

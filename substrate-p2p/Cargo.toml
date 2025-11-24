@@ -8,6 +8,7 @@ futures = { workspace = true }
 libp2p = { workspace = true, features = ["kad"] }
 log = { workspace = true }
 pin-project = { workspace = true }
+primitive-types.workspace = true
 asynchronous-codec = { workspace = true }
 unsigned-varint = { workspace = true, features = ["futures", "asynchronous_codec"] }
 thiserror = { workspace = true }
