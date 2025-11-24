@@ -486,13 +486,16 @@ impl ConnectionHandler for Handler {
             }) => {
                 let (mut stream, i) = (protocol.data, protocol.index);
 
-                log::debug!("Handler negotiated inbound peer={:?}", self.peer,);
+                log::debug!(
+                    "Handler negotiated inbound peer={:?} and index: {i:?}",
+                    self.peer,
+                );
 
                 let proto = &mut self.protocols[i];
                 match proto.state {
                     State::Closed { pending_opening } => {
                         log::trace!(
-                            "Handler negotiated inbound Closed -> OpenDesiredByRemote peer={:?}",
+                            "Handler negotiated inbound Closed -> OpenDesiredByRemote peer={:?} index={i:?}",
                             self.peer,
                         );
 
@@ -508,7 +511,7 @@ impl ConnectionHandler for Handler {
                     }
                     State::OpenDesiredByRemote { .. } => {
                         log::trace!(
-                            "Handler negotiated inbound OpenDesiredByRemote peer={:?}",
+                            "Handler negotiated inbound OpenDesiredByRemote peer={:?} index={i:?}",
                             self.peer,
                         );
                     }
@@ -523,14 +526,14 @@ impl ConnectionHandler for Handler {
                         // Already handled.
                         if inbound_substream.is_some() {
                             log::trace!(
-                                "Handler negotiated inbound handshake already handled peer={:?}",
+                                "Handler negotiated inbound handshake already handled peer={:?} index={i:?}",
                                 self.peer,
                             );
                             return;
                         }
 
                         log::trace!(
-                            "Handler negotiated inbound setup handshake peer={:?}",
+                            "Handler negotiated inbound setup handshake peer={:?} index={i:?}",
                             self.peer,
                         );
 
@@ -543,7 +546,10 @@ impl ConnectionHandler for Handler {
             ConnectionEvent::FullyNegotiatedOutbound(outbound) => {
                 let (opened, i) = (outbound.protocol, outbound.info);
 
-                log::debug!("Handler negotiated outbound peer={:?}", self.peer,);
+                log::debug!(
+                    "Handler negotiated outbound peer={:?} index={i:?}",
+                    self.peer,
+                );
 
                 let proto = &mut self.protocols[i];
                 match proto.state {
@@ -555,7 +561,7 @@ impl ConnectionHandler for Handler {
                         ..
                     } => {
                         log::trace!(
-                            "Handler negotiated outbound Closed|OpenDesiredByRemote peer={:?}",
+                            "Handler negotiated outbound Closed|OpenDesiredByRemote peer={:?} index={i:?}",
                             self.peer,
                         );
 
@@ -566,7 +572,7 @@ impl ConnectionHandler for Handler {
                         inbound,
                     } => {
                         log::trace!(
-                            "Handler negotiated outbound Opening successful peer={:?}. Inbound: {inbound:?}",
+                            "Handler negotiated outbound Opening successful peer={:?}. Inbound: {inbound:?} index={i:?}",
                             self.peer,
                         );
 
@@ -588,7 +594,7 @@ impl ConnectionHandler for Handler {
                     }
                     State::Open { .. } => {
                         log::trace!(
-                            "Handler negotiated outbound Open missmatch-state peer={:?}",
+                            "Handler negotiated outbound Open missmatch-state peer={:?} index={i:?}",
                             self.peer,
                         );
                     }
@@ -596,9 +602,10 @@ impl ConnectionHandler for Handler {
             }
             ConnectionEvent::DialUpgradeError(err) => {
                 log::debug!(
-                    "Handler DialError peer={:?} error={:?}",
+                    "Handler DialError peer={:?} error={:?} index={:?}",
                     self.peer,
                     err.error,
+                    err.info
                 );
 
                 let proto = &mut self.protocols[err.info];
@@ -612,8 +619,9 @@ impl ConnectionHandler for Handler {
                         ..
                     } => {
                         log::trace!(
-                            "Handler DialError Closed|OpenDesiredByRemote peer={:?}",
+                            "Handler DialError Closed|OpenDesiredByRemote peer={:?} index={:?}",
                             self.peer,
+                            err.info
                         );
 
                         *pending_opening = false;
@@ -623,7 +631,11 @@ impl ConnectionHandler for Handler {
                             pending_opening: false,
                         };
 
-                        log::trace!("Handler DialError Opening -> Closed peer={:?}", self.peer,);
+                        log::trace!(
+                            "Handler DialError Opening -> Closed peer={:?}  index={:?}",
+                            self.peer,
+                            err.info
+                        );
 
                         self.pending_events
                             .push_back(ConnectionHandlerEvent::NotifyBehaviour(
