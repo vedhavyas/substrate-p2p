@@ -25,7 +25,7 @@ impl BlockAnnouncesHandshake {
     pub fn from_genesis(genesis_hash: H256) -> Self {
         Self {
             // Full node
-            roles: 4,
+            roles: 1,
             best_number: 0u32,
             best_hash: genesis_hash,
             genesis_hash,
