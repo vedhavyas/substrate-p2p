@@ -253,7 +253,7 @@ impl ConnectionHandler for Handler {
                         }
                     };
 
-                    log::trace!(
+                    log::info!(
                         "Handler poll send message peer={:?} message={:?}",
                         self.peer,
                         message
@@ -266,6 +266,16 @@ impl ConnectionHandler for Handler {
         }
 
         for i in 0..self.protocols.len() {
+            match &mut self.protocols[i].state {
+                State::Closed { .. } => log::info!("Poll outbound stream: index={i} state=Closed",),
+                State::OpenDesiredByRemote { .. } => {
+                    log::info!("Poll outbound stream: index={i} state=OpenDesiredByRemote",)
+                }
+                State::Opening { .. } => {
+                    log::info!("Poll outbound stream: index={i} state=Opening",)
+                }
+                State::Open { .. } => log::info!("Poll outbound stream: index={i} state=Open",),
+            }
             // Flush outbound stream.
             if let State::Open {
                 outbound_substream: outbound_substream @ Some(_),
@@ -287,6 +297,16 @@ impl ConnectionHandler for Handler {
 
         // Poll inbound stream.
         for i in 0..self.protocols.len() {
+            match &mut self.protocols[i].state {
+                State::Closed { .. } => log::info!("Poll inbound stream: index={i} state=Closed",),
+                State::OpenDesiredByRemote { .. } => {
+                    log::info!("Poll inbound stream: index={i} state=OpenDesiredByRemote",)
+                }
+                State::Opening { .. } => {
+                    log::info!("Poll inbound stream: index={i} state=Opening",)
+                }
+                State::Open { .. } => log::info!("Poll inbound stream: index={i} state=Open",),
+            }
             match &mut self.protocols[i].state {
                 State::Open {
                     inbound_substream: inbound_substream @ Some(_),
@@ -494,7 +514,7 @@ impl ConnectionHandler for Handler {
                 let proto = &mut self.protocols[i];
                 match proto.state {
                     State::Closed { pending_opening } => {
-                        log::trace!(
+                        log::info!(
                             "Handler negotiated inbound Closed -> OpenDesiredByRemote peer={:?} index={i:?}",
                             self.peer,
                         );
@@ -510,7 +530,7 @@ impl ConnectionHandler for Handler {
                         };
                     }
                     State::OpenDesiredByRemote { .. } => {
-                        log::trace!(
+                        log::info!(
                             "Handler negotiated inbound OpenDesiredByRemote peer={:?} index={i:?}",
                             self.peer,
                         );
@@ -525,14 +545,14 @@ impl ConnectionHandler for Handler {
                     } => {
                         // Already handled.
                         if inbound_substream.is_some() {
-                            log::trace!(
+                            log::info!(
                                 "Handler negotiated inbound handshake already handled peer={:?} index={i:?}",
                                 self.peer,
                             );
                             return;
                         }
 
-                        log::trace!(
+                        log::info!(
                             "Handler negotiated inbound setup handshake peer={:?} index={i:?}",
                             self.peer,
                         );
@@ -560,7 +580,7 @@ impl ConnectionHandler for Handler {
                         ref mut pending_opening,
                         ..
                     } => {
-                        log::trace!(
+                        log::info!(
                             "Handler negotiated outbound Closed|OpenDesiredByRemote peer={:?} index={i:?}",
                             self.peer,
                         );
@@ -571,7 +591,7 @@ impl ConnectionHandler for Handler {
                         ref mut inbound_substream,
                         inbound,
                     } => {
-                        log::trace!(
+                        log::info!(
                             "Handler negotiated outbound Opening successful peer={:?}. Inbound: {inbound:?} index={i:?}",
                             self.peer,
                         );
@@ -593,7 +613,7 @@ impl ConnectionHandler for Handler {
                             ));
                     }
                     State::Open { .. } => {
-                        log::trace!(
+                        log::info!(
                             "Handler negotiated outbound Open missmatch-state peer={:?} index={i:?}",
                             self.peer,
                         );
@@ -618,7 +638,7 @@ impl ConnectionHandler for Handler {
                         ref mut pending_opening,
                         ..
                     } => {
-                        log::trace!(
+                        log::info!(
                             "Handler DialError Closed|OpenDesiredByRemote peer={:?} index={:?}",
                             self.peer,
                             err.info
@@ -631,7 +651,7 @@ impl ConnectionHandler for Handler {
                             pending_opening: false,
                         };
 
-                        log::trace!(
+                        log::info!(
                             "Handler DialError Opening -> Closed peer={:?}  index={:?}",
                             self.peer,
                             err.info

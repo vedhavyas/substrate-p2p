@@ -189,11 +189,13 @@ where
                     });
 
                 for i in 0..self.protocols.len() {
-                    self.propagate_event(ToSwarm::NotifyHandler {
-                        peer_id,
-                        handler: NotifyHandler::One(connection_id),
-                        event: NotificationsHandlerFromBehavior::Open { i },
-                    });
+                    if matches!(self.protocols[0], Protocol::Protocol(_)) {
+                        self.propagate_event(ToSwarm::NotifyHandler {
+                            peer_id,
+                            handler: NotifyHandler::One(connection_id),
+                            event: NotificationsHandlerFromBehavior::Open { i },
+                        });
+                    }
                 }
             }
             libp2p::swarm::FromSwarm::ConnectionClosed(ConnectionClosed {
