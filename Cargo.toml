@@ -21,3 +21,5 @@ bytes = "1"
 codec = { package = "parity-scale-codec", version = "3.4.0", features = ["derive"] }
 hex = "0.4.3"
 multiaddr = { version = "0.18.1" }
+either = "1.15.0"
+fnv = "1.0.7"

@@ -16,3 +16,5 @@ bytes = { workspace = true }
 hex = { workspace = true }
 multiaddr = { workspace = true }
 codec.workspace = true
+either.workspace = true
+fnv.workspace = true

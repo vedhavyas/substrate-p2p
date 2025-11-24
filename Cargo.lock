@@ -2783,6 +2783,8 @@ version = "0.1.0"
 dependencies = [
  "asynchronous-codec",
  "bytes",
+ "either",
+ "fnv",
  "futures",
  "hex",
  "libp2p",
